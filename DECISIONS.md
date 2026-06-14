@@ -252,3 +252,100 @@ The CSV import feature needed a robust parser that could handle the app's export
 - The `transformHeader` callback allows flexible column name normalization (e.g., matching "Description" or "Title" to the `title` field).
 - Works in the server-side tRPC context without additional configuration.
 - Well-maintained and widely used (2M+ weekly downloads).
+
+---
+
+## Decision 11: Dual-Mode CSV Import Architecture
+
+### Problem
+The CSV import needed to support both the app's existing export format AND the assignment CSV format (with columns: `date`, `description`, `paid_by`, `amount`, `currency`, `split_type`, `split_with`, `split_details`, `notes`).
+
+### Options Considered
+
+| Option | Pros | Cons |
+|---|---|---|
+| **Single unified parser** | One code path; simpler maintenance | Column conflicts; awkward conditional logic; data assumptions may not hold for both formats |
+| **User selects format** | Clear user intent | Poor UX; users may not know which format they have |
+| **Auto-detect dual-mode (chosen)** | Seamless UX; each parser is clean and format-specific | Two code paths to maintain; detection logic could misidentify ambiguous files |
+
+### Final Choice
+**Auto-detect dual-mode** — The import procedure inspects CSV headers at runtime and dispatches to the correct format-specific parser.
+
+### Reasoning
+- Each parser is purpose-built for its format, avoiding messy conditionals.
+- Detection is reliable: assignment CSV has distinct columns (`paid_by`, `split_with`, `split_details`) not present in app exports, and vice versa.
+- Detection falls back to assignment CSV format as default since that's the primary import target.
+- Shared utilities (date parsing, amount parsing, participant matching, anomaly generation) live in `src/lib/csv-parser.ts` to avoid duplication.
+
+---
+
+## Decision 12: Structured Anomaly Classification System
+
+### Problem
+The import needed to detect, classify, and report data quality issues with enough detail for users to understand and fix problems.
+
+### Options Considered
+
+| Option | Pros | Cons |
+|---|---|---|
+| **Binary pass/fail** | Simple | No actionable feedback; users can't tell what went wrong |
+| **Error messages only** | Informative | Unstructured; hard to build UIs on top of; can't filter by severity |
+| **Structured Anomaly type with severity + action (chosen)** | Rich reporting; filterable; actionable; enables auto-fix logging | More complex return types; requires JSON serialization for persistence |
+
+### Final Choice
+**Structured `Anomaly` type** with three severities (`error`, `warning`, `info`) and three actions (`skipped`, `auto-fixed`, `flagged`).
+
+### Reasoning
+- Structured data enables the rich import report UI with categorized sections (errors, warnings, auto-fixes).
+- Severity levels let users prioritize: errors block imports, warnings need review, info is informational.
+- The action field enables audit logging — every auto-fix is documented with original and new values.
+- Anomalies are serialized to the `ImportLog.data` field as JSON for persistence and downloadable reports.
+
+---
+
+## Decision 13: Date Format Ambiguity Handling via User Prompt
+
+### Problem
+Dates like `04/05/2026` are ambiguous — they could be April 5 (DD/MM) or May 4 (MM/DD). The parser needed to handle this without guessing.
+
+### Options Considered
+
+| Option | Pros | Cons |
+|---|---|---|
+| **Always DD/MM** | Simple; consistent | Wrong for half the CSV files; produces silently incorrect data |
+| **Heuristic (first >12 = day)** | Works for most cases | Fails when both parts ≤ 12; still ambiguous |
+| **User prompt (chosen)** | User knows their own format; no incorrect parses | Requires UI interaction; pauses the import flow |
+
+### Final Choice
+**Two-phase import**: Phase 1 detects ambiguous dates and returns them to the UI; Phase 2 re-imports with the user's chosen format.
+
+### Reasoning
+- The tRPC procedure returns `{ ambiguousDates, requiresDateFormat: true }` when ambiguity is detected.
+- The import dialog shows a date format picker (DD/MM vs MM/DD) with an example conversion for each choice.
+- The user's choice is sent back as the `preferredDateFormat` parameter in the next import attempt.
+- This approach ensures zero incorrect date parses while maintaining a smooth UX flow.
+
+---
+
+## Decision 14: Time-Based Membership via joinedAt/leftAt
+
+### Problem
+The assignment CSV scenario requires that participants are only responsible for expenses that occurred during their membership period. Meera moves out March 28 (shouldn't be charged after), Sam joins April 8 (shouldn't be charged before).
+
+### Options Considered
+
+| Option | Pros | Cons |
+|---|---|---|
+| **Manual participation flags per expense** | Granular control | Tedious for large groups; defeats the purpose of time-based membership |
+| **Date ranges on participants (joinedAt/leftAt) + automatic filtering (chosen)** | Automatic; once dates are set, expenses are handled correctly | Requires schema migration; adds complexity to balance calculations |
+| **Separate membership table** | More normalized | Over-engineering for the use case; complicates queries |
+
+### Final Choice
+**Add `joinedAt` and `leftAt` columns to Participant** — Both are `DateTime` fields; `leftAt` is nullable (null = currently active).
+
+### Reasoning
+- Simple schema change: two fields on the existing `Participant` model.
+- `joinedAt` defaults to `now()` for backward compatibility with existing participants.
+- The import procedure checks membership dates: if a participant's `joinedAt > expenseDate` or `leftAt < expenseDate`, they are considered inactive and skipped with a `MEMBER_NOT_ACTIVE` anomaly.
+- Soft-deletes: when a participant leaves via the Leave Group button or group edit, `leftAt` is set to `now()` instead of deleting the record.
+- The participant timeline component (`ParticipantTimeline`) provides visual feedback of membership periods.

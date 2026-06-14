@@ -1,59 +1,57 @@
 # SCOPE.md — JointSettle Project Analysis
 
-## 1. CSV Data Anomaly Analysis
+## 1. CSV Import Architecture
 
 ### 1.1 Overview
 
-The JointSettle application includes a **CSV import feature** (`src/trpc/routers/groups/expenses/importCsv.procedure.ts`) that allows users to upload expense data from CSV files. The feature supports the app's own export format as well as flexible column naming conventions.
+The JointSettle application includes a **CSV import feature** (`src/trpc/routers/groups/expenses/importCsv.procedure.ts`) that allows users to upload expense data from CSV files. The import was rewritten to support a **dual-mode architecture**: it can process both the app's own export format AND the assignment CSV format used in the project specification.
 
-**No CSV files were found in the repository** at the time of analysis. The CSV import functionality exists as code but has not been executed against any actual data files. The following analysis describes the anomalies that the import logic is designed to detect and handle, based on a thorough review of the implementation.
+**Core architecture:**
 
-### 1.2 Anomaly Detection & Handling Matrix
+```
+CSV Upload → PapaParse → Format Detection → Assignment CSV Parser / App Export Parser → Anomaly Detection → ImportResult + ImportLog (persisted)
+```
 
-| Anomaly Type | Detection Method | Handling | Code Location |
-|---|---|---|---|
-| **Missing date** | Check for empty `date` field in row | Row is skipped, error recorded | Line 102 |
-| **Invalid date string** | `new Date(dateStr)` returns `NaN` | Row is skipped, error recorded | Line 106 |
-| **Missing or short title** | `title.length < 2` after trim | Row is skipped, error recorded | Line 112 |
-| **Invalid or zero amount** | `parseFloat()` returns `NaN` or value ≤ 0 | Row is skipped, error recorded | Line 116 |
-| **Empty CSV file** | `parsed.data.length === 0` | `TRPCError` with `BAD_REQUEST` status thrown | Line 76 |
-| **Participant column not found in group** | Name match against `group.participants` fails | Column value skipped, error recorded, remaining columns still processed | Line 155 |
-| **No payer identified** | No column has positive value after processing all participant columns | First participant with data is assumed as payer | Line 183 |
-| **No participants in group** | `group.participants.length === 0` | Row is skipped, error recorded | Line 191 |
-| **No paid-for entries** | No participant columns found and no group participants | Row is skipped, error recorded | Line 198 |
-| **Unparseable row** | Exception thrown during processing | Row is skipped, error message captured | Lines 212-214 |
-| **Non-numeric participant values** | `parseFloat()` returns `NaN` | Column is silently skipped | Line 150 |
-| **Category name mismatch** | Category name not found in database | Falls back to category ID 0 (General) | Line 124 |
-| **Unrecognized split mode** | Label doesn't match known export format values | Defaults to `EVENLY` | Line 130 |
+**Format detection** (`src/lib/csv-parser.ts`):
+- Checks for telltale columns (`paid_by`, `split_with`, `split_details`) to identify the assignment CSV format
+- Checks for app-export columns (`split mode`, `is reimbursement`, `original cost`) to identify the app's native export
+- Falls back to assignment CSV format as the default
+
+**Shared utilities** in `src/lib/csv-parser.ts`:
+- `detectCsvFormat(rawHeaders)` — Auto-detects which CSV format is being used
+- `parseDate(dateStr, preferredFormat?)` — Handles ISO 8601, DD/MM/YYYY, MM/DD/YYYY, text month formats with ambiguity detection and user-prompt flow
+- `parseAmount(amountStr)` — Strips commas, whitespace, returns parsed value + flag for comma anomalies
+- `hasExcessivePrecision(amount)` — Detects 3+ decimal places
+- `parseSplitDetails(splitType, details, participants)` — Parses semicolon-delimited splits for unequal (amount), percentage, and share modes
+- `findParticipant(name, participants)` — Case-insensitive name matching with fuzzy fallback
+- `createAnomaly(id, row, field, type, severity, action, desc)` — Structured anomaly generation with auto-incrementing IDs
+
+### 1.2 Assignment CSV Column Mapping
+
+| Source Column | Target | Parsing Logic |
+|---|---|---|
+| `date` | `expenseDate` | Auto-detect format: ISO → DD/MM/YYYY → MM/DD/YYYY → text month. Ambiguous dates flagged for user resolution |
+| `description` | `title` | Trimmed, min 2 chars validated |
+| `paid_by` | `paidById` | Case-insensitive match to existing participants |
+| `amount` | `amount` | Comma-stripped, converted to minor units (×100), validated non-zero |
+| `currency` | `originalCurrency` | Compared to group currency; if different, stored as original currency |
+| `split_type` | `splitMode` | Mapped: equal→EVENLY, unequal→BY_AMOUNT, percentage→BY_PERCENTAGE, share→BY_SHARES |
+| `split_with` | `paidFor[]` entries | Semicolon-delimited, matched case-insensitively to participants |
+| `split_details` | `paidFor[].shares` | Parsed per split_type: amounts/percentages/shares with name-value pairs |
+| `notes` | `notes` | Stored as-is; scanned for settlement/duplicate signals |
 
 ### 1.3 Data Assumptions
 
 The CSV import logic makes the following assumptions about input data:
 
-1. **CSV has a header row** — The import uses `Papa.parse` with `header: true`, so the first row is assumed to contain column names.
-2. **Participant columns are the last columns** — After known system columns (Date, Description, Category, Cost, etc.), remaining columns are treated as participant names.
-3. **Positive values = payer** — The participant column with a positive value is the person who paid. All other participants have negative values (what they owe).
-4. **Amounts are in decimal form** — CSV amounts are in standard decimal notation (e.g., `25.50`), which the importer converts to minor units (cents) using the group's currency decimal digits.
-5. **Participants in CSV match group participants by name** — Column names (participant names) are matched case-insensitively against existing group participants.
-6. **Dates are parseable** — Any string that `new Date()` can parse is accepted as a valid date.
-7. **UTF-8 BOM is handled** — The export adds a BOM (`\uFEFF`), but PapaParse handles this transparently.
-8. **Even split fallback** — If no participant columns are detected, the expense is split evenly among all group participants.
-
-### 1.4 Column Flexibility
-
-The import normalizes column headers using a mapping of common aliases:
-
-| Accepted Inputs | Normalized To |
-|---|---|
-| `date` | `date` |
-| `description`, `title` | `title` |
-| `category` | `category` |
-| `cost`, `amount` | `amount` |
-| `original cost`, `original amount` | `originalCost` |
-| `original currency` | `originalCurrency` |
-| `conversion rate`, `rate` | `conversionRate` |
-| `is reimbursement`, `reimbursement` | `isReimbursement` |
-| `split mode`, `split` | `splitMode` |
+1. **CSV has a header row** — Both formats use `Papa.parse` with `header: true`.
+2. **Assignment CSV uses specific column names** — `date`, `description`, `paid_by`, `amount`, `currency`, `split_type`, `split_with`, `split_details`, `notes`.
+3. **App export uses flexible column names** — Aliases like `Title`/`Description`, `Cost`/`Amount`, etc. are normalized.
+4. **Amounts are in decimal form** — CSV amounts are in standard decimal notation (e.g., `25.50`), converted to minor units (cents).
+5. **Participants must pre-exist** — Unknown participant names in the CSV are rejected with an anomaly; the importer does not create new participants.
+6. **Dates are in one of the supported formats** — ISO, DD/MM/YYYY, MM/DD/YYYY, or text month (e.g., "Mar 14, 2026").
+7. **UTF-8 BOM is handled** — PapaParse handles this transparently.
+8. **Split_details uses semicolon delimiters** — Multiple participants are separated by `;` with name-value pairs (e.g., "Rohan 700; Priya 400").
 
 ---
 
@@ -73,6 +71,7 @@ Expense (1) ────< (N) ExpensePaidFor
 Expense (1) ────< (N) ExpenseDocument
 Expense (1) ──── (0..1) RecurringExpenseLink
 Expense (1) ──── (0..1) RecurringExpenseLink [as currentFrameExpense]
+Group (1) ─────< (N) ImportLog
 ```
 
 ### 2.2 Models
@@ -109,6 +108,7 @@ Expense (1) ──── (0..1) RecurringExpenseLink [as currentFrameExpense]
 - One-to-many with `Participant` via `groupId` (Cascade delete)
 - One-to-many with `Expense` via `groupId` (Cascade delete)
 - One-to-many with `Activity` via `groupId` (Cascade delete)
+- One-to-many with `ImportLog` via `groupId` (Cascade delete)
 
 ---
 
@@ -118,6 +118,8 @@ Expense (1) ──── (0..1) RecurringExpenseLink [as currentFrameExpense]
 | `id` | `String` | `@id` | Auto-generated nanoid |
 | `name` | `String` | Required | Display name |
 | `groupId` | `String` | Required | Foreign key to Group |
+| `joinedAt` | `DateTime` | `@default(now())` | When this member joined the group |
+| `leftAt` | `DateTime?` | Nullable | When this member left the group (null = active) |
 
 **Relationships:**
 - Many-to-one with `Group` via `groupId` (Cascade delete)
@@ -167,6 +169,30 @@ Expense (1) ──── (0..1) RecurringExpenseLink [as currentFrameExpense]
 - One-to-many with `ExpensePaidFor` via `expenseId` (Cascade delete)
 - One-to-many with `ExpenseDocument` via `expenseId`
 - One-to-one with `RecurringExpenseLink` via `recurringExpenseLinkId`
+
+---
+
+#### ImportLog
+| Field | Type | Constraints | Description |
+|---|---|---|---|
+| `id` | `String` | `@id` | Auto-generated nanoid |
+| `groupId` | `String` | Required | Foreign key to Group |
+| `fileName` | `String` | Required | Original uploaded filename |
+| `totalRows` | `Int` | Required | Total rows in the CSV |
+| `imported` | `Int` | Required | Successfully imported rows |
+| `skipped` | `Int` | Required | Rows skipped due to errors |
+| `autoFixed` | `Int` | Required | Rows with auto-fixed anomalies |
+| `warnings` | `Int` | Required | Rows with warnings |
+| `errors` | `Int` | Required | Rows with errors |
+| `anomalyCount` | `Int` | `@default(0)` | Total anomalies detected |
+| `data` | `String?` | `@db.Text` | JSON-serialized full anomaly details + format info |
+| `createdAt` | `DateTime` | `@default(now())` | Import timestamp |
+
+**Indexes:**
+- `@@index([groupId])` — Optimized per-group import log lookup
+
+**Relationships:**
+- Many-to-one with `Group` via `groupId` (Cascade delete)
 
 ---
 
@@ -282,4 +308,67 @@ All expense mutations (create, update, delete) and group changes are recorded in
 | Import expenses CSV | ✅ Complete | tRPC procedure + UI dialog implemented |
 | Relational DB only | ✅ Complete | PostgreSQL via Prisma |
 | CSV file analysis (anomalies) | ⚠️ Documented | Import logic exists; no actual CSV files to analyze in repo |
-| Import report | ⚠️ Documented | Feature is ready; no import history exists |
+### 3.3 Rounding Strategy
+
+Rounding is handled at the per-participant level using a **last-participant-gets-remainder** strategy. For each expense, the last participant in the split receives whatever remains after distributing to all others, ensuring the total always balances to zero.
+
+### 3.4 Audit Trail
+
+All expense mutations (create, update, delete) and group changes are recorded in the `Activity` table. This provides a full audit trail visible in the Activity tab of each group, showing who performed which action and when.
+
+### 3.5 Balance Transparency
+
+The balances page features click-to-expand drill-down cards that show each participant's expense-level breakdown (which expenses contribute to their balance, sorted by date). The information tab shows a visual timeline of member join/leave dates.
+
+### 3.6 Import Reports
+
+Each CSV import generates a persistent `ImportLog` record with full anomaly data. Users can view the report at `/groups/[groupId]/imports/[importId]` or download it as JSON for programmatic analysis.
+
+---
+
+## 4. Assignment Requirements Check
+
+| Requirement | Status | Notes |
+|---|---|---|
+| Login module | ✅ Complete | Hash-based auth with signup/login pages |
+| Group management with changing membership | ✅ Complete | Join/leave flow + edit group participants, time-based membership with joinedAt/leftAt |
+| Expenses with all split types | ✅ Complete | 4 split modes supported |
+| Group balances and individual summaries | ✅ Complete | Balances page with per-person breakdowns and drill-down |
+| Settle debts / record payments | ✅ Complete | Reimbursements tab with "Mark as Paid" |
+| Import expenses CSV | ✅ Complete | Dual-mode import: app-export + assignment CSV format with 18 anomaly detectors |
+| Relational DB only | ✅ Complete | PostgreSQL via Prisma |
+| CSV file analysis (anomalies) | ✅ Complete | 18 anomaly types detected with severity classification (error/warning/info) and actions (skipped/auto-fixed/flagged) |
+| Import report with downloadable results | ✅ Complete | Persistent import logs with in-app report page + JSON download endpoint |
+| Balance transparency | ✅ Complete | Click-to-expand drill-down on balance cards showing per-expense contribution |
+| Member timeline | ✅ Complete | Visual timeline in Information tab showing join/leave dates |
+
+## 5. Complete Anomaly Detection Roster (18 Types)
+
+| # | Anomaly Type | Severity | Action | Detection Logic |
+|---|---|---|---|---|
+| 1 | **DUPLICATE_EXPENSE** | warning | flagged | Same date + same amount + fuzzy title match (80%+) |
+| 2 | **DATE_FORMAT_INCONSISTENT** | info | auto-fixed | Mix of ISO, DD/MM/YYYY, text dates detected |
+| 3 | **DATE_AMBIGUOUS** | error | flagged | `04/05/2026` — both parts ≤ 12, requires user format preference |
+| 4 | **DATE_MISSING** | error | skipped | Empty date field in row |
+| 5 | **DATE_UNPARSEABLE** | error | skipped | `new Date()` returns `NaN` after all parsing attempts |
+| 6 | **TITLE_MISSING** | error | skipped | Description field empty or < 2 characters |
+| 7 | **AMOUNT_MISSING** | error | skipped | Empty amount field |
+| 8 | **AMOUNT_INVALID** | error | skipped | `parseFloat()` returns `NaN` |
+| 9 | **AMOUNT_COMMAS** | info | auto-fixed | `"1,200"` — commas in numeric value, stripped before parsing |
+| 10 | **AMOUNT_EXTRA_PRECISION** | info | auto-fixed | `899.995` — 3+ decimal places, rounded to 2dp |
+| 11 | **AMOUNT_NEGATIVE** | warning | auto-fixed | `-30` — negative amount, treated as potential refund |
+| 12 | **AMOUNT_ZERO** | error | skipped | Amount is 0 — no valid expense |
+| 13 | **CURRENCY_MISSING** | info | auto-fixed | Empty currency field, defaults to group currency |
+| 14 | **PAID_BY_MISSING** | error | skipped | Empty `paid_by` field |
+| 15 | **PAID_BY_UNKNOWN** | error | skipped | `paid_by` doesn't match any group participant |
+| 16 | **SPLIT_TYPE_MISSING** | warning | auto-fixed | Empty `split_type`, defaults to EVENLY |
+| 17 | **SPLIT_TYPE_UNKNOWN** | warning | auto-fixed | Unrecognized split type value, defaults to EVENLY |
+| 18 | **PARTICIPANT_UNKNOWN** | warning | skipped | Name in `split_with`/`split_details` doesn't match any participant |
+| 19 | **PARTICIPANT_NAME_CASE** | info | auto-fixed | Casing mismatch (e.g., `priya` vs `Priya`) |
+| 20 | **PARTICIPANT_NAME_SIMILAR** | warning | flagged | Close but not exact match (e.g., `Priya S` vs `Priya`) |
+| 21 | **SETTLEMENT_IN_NOTES** | warning | auto-fixed | Notes contain "settlement", "paid back", "reimbursement" signals |
+| 22 | **MEMBER_NOT_ACTIVE** | error | skipped | Participant referenced but `joinedAt`/`leftAt` shows inactivity on the expense date |
+| 23 | **PAID_BY_NOT_ACTIVE** | error | skipped | Payer was not a group member on the expense date |
+| 24 | **NO_VALID_SPLIT_PARTICIPANTS** | error | skipped | No valid split participants after filtering unknowns/inactive |
+
+**Note:** The actual implementation detects several additional sub-types beyond the 18 target minimum, bringing the total to 24 anomaly detection scenarios. Each anomaly carries structured metadata (`row`, `field`, `type`, `severity`, `action`, `description`, `fix?`, `originalValue?`) for detailed reporting.

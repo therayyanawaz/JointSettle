@@ -10,7 +10,7 @@
 | **GPT-4o** | In-app AI features (receipt scanning via vision API) | Used via OpenAI API within the app itself |
 
 **Note:** The AI tools listed above were used in two distinct contexts:
-1. **Development assistance** — AI helped write the code (Opus 4.8 / Fable5)
+1. **Development assistance** — AI helped write the code (Opus 4.8 / Fable5 / DeepSeek V4 Flash)
 2. **In-app features** — The application itself offers AI-powered features to end users (OpenAI)
 
 ---
@@ -167,7 +167,7 @@ Don't guess at root causes — pull the actual error logs first. The AI should h
 
 ---
 
-## 5. Lessons Learned
+## 5. Lessons Learned (All Phases)
 
 1. **Always validate generated code** — AI-generated code, especially library imports and data files, must be validated (typecheck JSON, run `tsc`, check the build) before considering work complete.
 
@@ -182,3 +182,19 @@ Don't guess at root causes — pull the actual error logs first. The AI should h
 6. **Incremental implementation with type checking** — Implementing features in small, type-checked increments (rather than one large batch) catches errors earlier and makes debugging easier.
 
 7. **CSV edge cases** — CSV parsing has many edge cases (BOM, quoted fields, encoding, line endings). Using a mature library like Papaparse instead of manual parsing is essential for robustness.
+
+### Phase 0–4 Specific Lessons
+
+8. **TypeScript `downlevelIteration` matters** — When spreading strings (`[...str]`), the TypeScript target must support downlevel iteration. Using `str.split('')` instead avoids the TS2802 error entirely and works with any target.
+
+9. **Date comparison with Date objects is timezone-sensitive** — Comparing `joinedAt > expenseDate` directly on Date objects can produce false positives when dates have time components (e.g., a participant joining at 3 PM on April 8 vs an expense on April 8 at midnight). Normalize to date-only strings (YYYY-MM-DD) before comparing.
+
+10. **tRPC input schemas enforce Zod validation** — Passing an empty string `hash: ''` when the schema requires `hash: z.string().length(8)` causes immediate Zod validation errors, not silent failures. Always propagate the actual auth hash from `useAuth()` to tRPC queries.
+
+11. **Auth state must be threaded to child components** — Balance drill-down needed the user's auth hash to fetch expenses. Using `useAuth()` directly (following the existing pattern) is cleaner than passing it through multiple prop levels.
+
+12. **Store anomaly details for reports** — Initially, the `ImportLog` model only stored aggregate counts (total rows, imported, skipped). The import report page couldn't show per-row anomaly details. Adding a `data` field (`String? @db.Text`) for JSON-serialized anomalies fixed this — always plan for detail requirements upfront.
+
+13. **JSON.parse returns `unknown` in strict TypeScript** — Without a type assertion (`as T`), `JSON.parse()` returns `unknown` and accessing `.anomalies` on it produces TS18046. Always cast `JSON.parse(...)` with the expected shape.
+
+14. **Placeholder props vs real auth tokens** — During initial development, placeholder values like `hash: ''` or fake participant IDs are tempting for getting components to typecheck. These cause runtime failures when connected to real backends. Use `enabled: isOpen && !!hash` to gate queries behind available auth state.
