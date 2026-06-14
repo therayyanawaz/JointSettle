@@ -40,6 +40,11 @@ export async function getUserByHash(hash: string) {
   return prisma.user.findUnique({ where: { hash } })
 }
 
+export async function verifyUserAuthenticated(hash: string): Promise<boolean> {
+  const user = await prisma.user.findUnique({ where: { hash } })
+  return user !== null
+}
+
 export async function verifyGroupOwnership(hash: string, groupId: string): Promise<boolean> {
   const user = await prisma.user.findUnique({ where: { hash } })
   if (!user) return false

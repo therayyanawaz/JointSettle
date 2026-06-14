@@ -1,4 +1,4 @@
-import { verifyGroupOwnership } from '@/lib/auth'
+import { verifyUserAuthenticated } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import contentDisposition from 'content-disposition'
 import { NextResponse } from 'next/server'
@@ -15,8 +15,8 @@ export async function GET(
   if (!hash || hash.length !== 8) {
     return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
   }
-  const isOwner = await verifyGroupOwnership(hash, groupId)
-  if (!isOwner) {
+  const isAuthenticated = await verifyUserAuthenticated(hash)
+  if (!isAuthenticated) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
   }
 

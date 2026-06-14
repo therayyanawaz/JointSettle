@@ -1,5 +1,5 @@
 import { getGroupExpenses } from '@/lib/api'
-import { verifyGroupOwnership } from '@/lib/auth'
+import { verifyUserAuthenticated } from '@/lib/auth'
 import {
   getBalances,
   getPublicBalances,
@@ -11,8 +11,8 @@ import { z } from 'zod'
 export const listGroupBalancesProcedure = baseProcedure
   .input(z.object({ groupId: z.string().min(1), hash: z.string().length(8) }))
   .query(async ({ input: { groupId, hash } }) => {
-    const isOwner = await verifyGroupOwnership(hash, groupId)
-    if (!isOwner) {
+    const isAuthenticated = await verifyUserAuthenticated(hash)
+    if (!isAuthenticated) {
       return { balances: {}, reimbursements: [] }
     }
     const expenses = await getGroupExpenses(groupId)

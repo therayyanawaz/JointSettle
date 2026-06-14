@@ -1,5 +1,5 @@
 import { deleteExpense } from '@/lib/api'
-import { verifyGroupOwnership } from '@/lib/auth'
+import { verifyUserAuthenticated } from '@/lib/auth'
 import { baseProcedure } from '@/trpc/init'
 import { TRPCError } from '@trpc/server'
 import { z } from 'zod'
@@ -14,9 +14,9 @@ export const deleteGroupExpenseProcedure = baseProcedure
     }),
   )
   .mutation(async ({ input: { expenseId, groupId, hash, participantId } }) => {
-    const isOwner = await verifyGroupOwnership(hash, groupId)
-    if (!isOwner) {
-      throw new TRPCError({ code: 'UNAUTHORIZED', message: 'You do not own this group' })
+    const isAuthenticated = await verifyUserAuthenticated(hash)
+    if (!isAuthenticated) {
+      throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Authentication required' })
     }
     await deleteExpense(groupId, expenseId, participantId)
     return {}

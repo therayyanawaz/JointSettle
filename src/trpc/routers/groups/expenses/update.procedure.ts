@@ -1,5 +1,5 @@
 import { updateExpense } from '@/lib/api'
-import { verifyGroupOwnership } from '@/lib/auth'
+import { verifyUserAuthenticated } from '@/lib/auth'
 import { expenseFormSchema } from '@/lib/schemas'
 import { baseProcedure } from '@/trpc/init'
 import { TRPCError } from '@trpc/server'
@@ -19,9 +19,9 @@ export const updateGroupExpenseProcedure = baseProcedure
     async ({
       input: { expenseId, groupId, hash, expenseFormValues, participantId },
     }) => {
-      const isOwner = await verifyGroupOwnership(hash, groupId)
-      if (!isOwner) {
-        throw new TRPCError({ code: 'UNAUTHORIZED', message: 'You do not own this group' })
+      const isAuthenticated = await verifyUserAuthenticated(hash)
+      if (!isAuthenticated) {
+        throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Authentication required' })
       }
       const expense = await updateExpense(
         groupId,

@@ -1,5 +1,5 @@
 import { getGroupExpenses } from '@/lib/api'
-import { verifyGroupOwnership } from '@/lib/auth'
+import { verifyUserAuthenticated } from '@/lib/auth'
 import {
   getTotalActiveUserPaidFor,
   getTotalActiveUserShare,
@@ -17,8 +17,8 @@ export const getGroupStatsProcedure = baseProcedure
     }),
   )
   .query(async ({ input: { groupId, hash, participantId } }) => {
-    const isOwner = await verifyGroupOwnership(hash, groupId)
-    if (!isOwner) {
+    const isAuthenticated = await verifyUserAuthenticated(hash)
+    if (!isAuthenticated) {
       return { totalGroupSpendings: 0, totalParticipantSpendings: undefined, totalParticipantShare: undefined }
     }
     const expenses = await getGroupExpenses(groupId)

@@ -1,5 +1,5 @@
 import { getGroupExpenses } from '@/lib/api'
-import { verifyGroupOwnership } from '@/lib/auth'
+import { verifyUserAuthenticated } from '@/lib/auth'
 import { baseProcedure } from '@/trpc/init'
 import { z } from 'zod'
 
@@ -14,8 +14,8 @@ export const listGroupExpensesProcedure = baseProcedure
     }),
   )
   .query(async ({ input: { groupId, hash, cursor = 0, limit = 10, filter } }) => {
-    const isOwner = await verifyGroupOwnership(hash, groupId)
-    if (!isOwner) {
+    const isAuthenticated = await verifyUserAuthenticated(hash)
+    if (!isAuthenticated) {
       return { expenses: [], hasMore: false, nextCursor: 0 }
     }
     const expenses = await getGroupExpenses(groupId, {

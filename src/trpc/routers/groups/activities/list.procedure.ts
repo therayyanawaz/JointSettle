@@ -1,5 +1,5 @@
 import { getActivities } from '@/lib/api'
-import { verifyGroupOwnership } from '@/lib/auth'
+import { verifyUserAuthenticated } from '@/lib/auth'
 import { baseProcedure } from '@/trpc/init'
 import { z } from 'zod'
 
@@ -13,8 +13,8 @@ export const listGroupActivitiesProcedure = baseProcedure
     }),
   )
   .query(async ({ input: { groupId, hash, cursor, limit } }) => {
-    const isOwner = await verifyGroupOwnership(hash, groupId)
-    if (!isOwner) {
+    const isAuthenticated = await verifyUserAuthenticated(hash)
+    if (!isAuthenticated) {
       return { activities: [], hasMore: false, nextCursor: 0 }
     }
     const activities = await getActivities(groupId, {
