@@ -24,15 +24,16 @@ import { useLocalStorageState, useMediaQuery } from '@/lib/hooks'
 import { GitHubLogoIcon } from '@radix-ui/react-icons'
 import {
   BarChart,
+  DollarSign,
   ExternalLink,
   Globe,
-  Linkedin,
   LucideIcon,
   Newspaper,
   Receipt,
+  Repeat,
+  Smartphone,
   Sparkles,
-  Speaker,
-  Twitter,
+  Tags,
   Wand,
 } from 'lucide-react'
 import Image from 'next/image'
@@ -49,50 +50,110 @@ type News = {
 
 const news: News[] = [
   {
-    id: 'transparency-post',
-    title: <>How much does JointSettle cost?</>,
+    id: 'multi-currency',
+    title: <>Multi-currency with live exchange rates</>,
     summary: (
       <>
-        A new blog post to cover how much JointSettle’s hosting costs and how much
-        people donate.
+        Expenses now support 170+ currencies with automatic live exchange rate
+        conversion powered by the Frankfurter API.
+      </>
+    ),
+    icon: DollarSign,
+    content: (
+      <>
+        <p>
+          You can now record expenses in any currency and JointSettle will
+          automatically convert them using live exchange rates.
+        </p>
+        <p>
+          Each expense can have its own currency, and the conversion rate is
+          automatically fetched based on the expense date. Historical exchange
+          rates are supported too — perfect for trips abroad.
+        </p>
+      </>
+    ),
+  },
+  {
+    id: 'stats-dashboard',
+    title: <>Stats dashboard &amp; charts</>,
+    summary: (
+      <>
+        Mini dashboard with spending overview, plus pie charts and bar charts
+        for detailed group analytics.
       </>
     ),
     icon: BarChart,
     content: (
       <>
         <p>
-          JointSettle has grown to 152k visitors, with community donations helping
-          cover its hosting costs. Explore its usage trends, funding, and the
-          contributors driving its development.
+          The expenses page now includes a mini dashboard showing total spend,
+          your spending, your balance, and your share at a glance — all with
+          animated counters and beautiful card layouts.
         </p>
         <p>
-          <Button asChild>
-            <a
-              target="_blank"
-              href="/blog/spliit-by-the-stats-usage-costs-donations"
-              className="no-underline"
-            >
-              <ExternalLink className="mr-2 w-4" />
-              Read the blog post
-            </a>
-          </Button>
+          Head to the Stats page for detailed pie charts by category and bar
+          charts by participant, helping you see exactly where the money is
+          going.
         </p>
       </>
     ),
   },
   {
-    id: 'languages',
-    title: <>JointSettle is now available in eight languages!</>,
+    id: 'categories',
+    title: <>100+ expense categories</>,
     summary: (
       <>
-        French, German, Spanish, and more! Read about it in our new blog post.
+        Rich categorization with 100+ categories across 12 groupings — Housing,
+        Food &amp; Dining, Shopping, Travel, and more.
+      </>
+    ),
+    icon: Tags,
+    content: (
+      <>
+        <p>
+          JointSettle now features 100+ categories across 12 groupings
+          including Housing, Transportation, Food &amp; Dining, Shopping,
+          Entertainment, Travel, Healthcare, Education, Income, and more.
+        </p>
+        <p>
+          Categories help you organize expenses and power the analytics and
+          charts for better spending insights.
+        </p>
+      </>
+    ),
+  },
+  {
+    id: 'recurring-expenses',
+    title: <>Recurring expenses</>,
+    summary: (
+      <>
+        Set daily, weekly, or monthly recurring expenses for regular bills and
+        subscriptions.
+      </>
+    ),
+    icon: Repeat,
+    content: (
+      <p>
+        You can now set expenses to repeat daily, weekly, or monthly. Perfect
+        for rent, subscriptions, utilities, and other regular bills. The
+        expense is automatically recreated on the schedule you set.
+      </p>
+    ),
+  },
+  {
+    id: 'languages',
+    title: <>JointSettle is now available in 23+ languages!</>,
+    summary: (
+      <>
+        French, German, Spanish, Japanese, and more! Read about it in our blog
+        post.
       </>
     ),
     icon: Globe,
     content: (
       <>
         <p>
-          JointSettle began as an English-only app but now supports multiple
+          JointSettle began as an English-only app but now supports 23+
           languages, thanks to the open-source community. Learn about the
           contributors and how to help expand language support.
         </p>
@@ -112,37 +173,6 @@ const news: News[] = [
     ),
   },
   {
-    id: 'blog-post-splitwise',
-    title: <>We need an open source alternative to Splitwise</>,
-    summary: <>Read our new blog post!</>,
-    icon: Newspaper,
-    content: (
-      <>
-        <p>
-          Since last fall, a free account on Splitwise lets you enter only three
-          transactions each day. 😲
-        </p>
-        <p>Could this happen with JointSettle? 🤔</p>
-        <p>
-          Read our new blog post showing why, for some applications, free is
-          just not enough. We need open source alternatives.
-        </p>
-        <p>
-          <Button asChild>
-            <a
-              target="_blank"
-              href="/blog/we-need-an-open-source-alternative-to-splitwise"
-              className="no-underline"
-            >
-              <ExternalLink className="mr-2 w-4" />
-              Read the blog post
-            </a>
-          </Button>
-        </p>
-      </>
-    ),
-  },
-  {
     id: 'scan-receipts',
     title: <>Scan receipts to create expenses</>,
     summary: <>Create expenses faster by taking a photo of a receipt!</>,
@@ -151,8 +181,8 @@ const news: News[] = [
       <>
         <p>
           Now, instead of entering all your expense information manually, you
-          can save time by taking a photo of a receipt. JointSettle will use AI to
-          extract information from it and fill the expense.
+          can save time by taking a photo of a receipt. JointSettle will use AI
+          to extract information from it and fill the expense.
         </p>
         <p>
           <Image
@@ -196,46 +226,52 @@ const news: News[] = [
     ),
   },
   {
-    id: 'share',
-    title: <>Do you like JointSettle? Tell others about it!</>,
+    id: 'pwa',
+    title: <>Install JointSettle as an app</>,
     summary: (
       <>
-        If you find the application helpful, it would mean the world to us if
-        you told your friends about it!
+        JointSettle is now a Progressive Web App — install it on your device
+        for a native-like experience.
       </>
     ),
-    icon: Speaker,
+    icon: Smartphone,
+    content: (
+      <p>
+        JointSettle is now a Progressive Web App (PWA). You can install it on
+        your phone, tablet, or desktop for a native-like experience — including
+        a home screen icon and offline support.
+      </p>
+    ),
+  },
+  {
+    id: 'transparency-post',
+    title: <>How much does JointSettle cost?</>,
+    summary: (
+      <>
+        A new blog post covering how much JointSettle’s hosting costs and how
+        much people donate.
+      </>
+    ),
+    icon: Newspaper,
     content: (
       <>
         <p>
-          If you find JointSettle helpful, it would mean the world to me if you told
-          your friends about it!
+          JointSettle has grown to 152k visitors, with community donations
+          helping cover its hosting costs. Explore its usage trends, funding,
+          and the contributors driving its development.
         </p>
-        <p>Why not sharing it on on your social media?</p>
-        <div className="flex gap-2">
+        <p>
           <Button asChild>
             <a
               target="_blank"
-              href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(
-                'I use JointSettle to track expenses with my friends and family. Check it out, it’s free and open source! https://jointsettle.app',
-              )}`}
-              className="bg-[#1d9bf0] text-white no-underline dark:bg-[#1d9bf0] dark:text-white dark:hover:text-black"
+              href="/blog/spliit-by-the-stats-usage-costs-donations"
+              className="no-underline"
             >
-              <Twitter className="mr-2 w-4" />
-              Share on Twitter
+              <ExternalLink className="mr-2 w-4" />
+              Read the blog post
             </a>
           </Button>
-          <Button asChild>
-            <a
-              target="_blank"
-              href={`https://www.linkedin.com/shareArticle?mini=true&url=https://jointsettle.app`}
-              className="bg-[#0b66c2] text-white no-underline dark:bg-[#0b66c2] dark:text-white dark:hover:text-black"
-            >
-              <Linkedin className="mr-2 w-4" />
-              Share on LinkedIn
-            </a>
-          </Button>
-        </div>
+        </p>
       </>
     ),
   },
