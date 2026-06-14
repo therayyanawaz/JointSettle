@@ -9,7 +9,7 @@ import { useTranslations } from 'next-intl'
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { useAuth } from '@/components/auth-provider'
-import { LogOut, LogIn, Sparkles, Newspaper } from 'lucide-react'
+import { LogOut, LogIn, Sparkles } from 'lucide-react'
 
 export function Nav() {
   const t = useTranslations()
@@ -37,23 +37,6 @@ export function Nav() {
 
       <nav role="navigation" aria-label="Menu" className="flex items-center">
         <ul className="flex items-center gap-1">
-          <li>
-            <Button
-              variant="ghost"
-              size="sm"
-              asChild
-              className={`-my-3 transition-all duration-300 ${
-                scrolled
-                  ? 'text-foreground/80 hover:text-foreground'
-                  : 'text-foreground/70 hover:text-foreground'
-              }`}
-            >
-              <Link href="/updates">
-                <Newspaper className="w-3.5 h-3.5 mr-1" />
-                {t('Header.latestUpdates')}
-              </Link>
-            </Button>
-          </li>
           {isLoggedIn ? (
             <li>
               <Button
