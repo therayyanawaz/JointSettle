@@ -10,7 +10,8 @@
     "check-types": "tsc --noEmit",
     "check-formatting": "prettier -c src",
     "postinstall": "prisma generate",
-    "vercel-build": "prisma generate && next build",
+    "seed": "ts-node --transpile-only prisma/seed.ts",
+    
     "prettier": "prettier -w src",
     "build-image": "./scripts/build-image.sh",
     "start-container": "docker compose --env-file container.env up",
