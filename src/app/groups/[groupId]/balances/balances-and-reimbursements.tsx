@@ -66,6 +66,7 @@ export default function BalancesAndReimbursements() {
               balances={balancesData.balances}
               participants={group?.participants}
               currency={getCurrencyFromGroup(group)}
+              groupId={groupId}
             />
           )}
         </div>

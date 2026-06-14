@@ -1,23 +1,32 @@
+'use client'
 import { Avatar } from '@/components/avatar'
+import { BalanceDrillDown } from '@/components/balance-drill-down'
 import { Balances } from '@/lib/balances'
 import { Currency } from '@/lib/currency'
 import { cn, formatCurrency } from '@/lib/utils'
 import { Participant } from '@prisma/client'
 import { useLocale } from 'next-intl'
-import { ArrowDownCircle, ArrowUpCircle, MinusCircle } from 'lucide-react'
+import { ArrowDownCircle, ArrowUpCircle, MinusCircle, ChevronDown, ChevronUp } from 'lucide-react'
+import { useState } from 'react'
 
 type Props = {
   balances: Balances
   participants: Participant[]
   currency: Currency
+  groupId: string
 }
 
-export function BalancesList({ balances, participants, currency }: Props) {
+export function BalancesList({ balances, participants, currency, groupId }: Props) {
   const locale = useLocale()
+  const [expandedId, setExpandedId] = useState<string | null>(null)
   const maxBalance = Math.max(
     ...Object.values(balances).map((b) => Math.abs(b.total)),
     1,
   )
+
+  const toggleExpand = (id: string) => {
+    setExpandedId(expandedId === id ? null : id)
+  }
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -27,11 +36,18 @@ export function BalancesList({ balances, participants, currency }: Props) {
         const isPositive = balance > 0
         const isNegative = balance < 0
         const isSettled = balance === 0
+        const isExpanded = expandedId === participant.id
 
         return (
           <div
             key={participant.id}
-            className="rounded-xl border border-blue-100/20 dark:border-blue-900/15 bg-white/50 dark:bg-white/[0.03] backdrop-blur-sm p-4 transition-all duration-300 ease-out hover:-translate-y-0.5 hover:shadow-md hover:shadow-blue-500/8 dark:hover:shadow-blue-600/8"
+            className={cn(
+              'rounded-xl border border-blue-100/20 dark:border-blue-900/15 bg-white/50 dark:bg-white/[0.03] backdrop-blur-sm p-4 transition-all duration-300 ease-out cursor-pointer',
+              isExpanded
+                ? 'shadow-md shadow-blue-500/12 dark:shadow-blue-600/12 border-blue-200/40 dark:border-blue-700/30'
+                : 'hover:-translate-y-0.5 hover:shadow-md hover:shadow-blue-500/8 dark:hover:shadow-blue-600/8',
+            )}
+            onClick={() => toggleExpand(participant.id)}
           >
             <div className="flex items-center gap-3">
               <Avatar
@@ -58,10 +74,21 @@ export function BalancesList({ balances, participants, currency }: Props) {
                         ? 'is owed'
                         : 'owes'}
                   </span>
+                  {/* Expand indicator */}
+                  {!isSettled && (
+                    <span className="ml-auto flex items-center gap-0.5 text-[10px] text-muted-foreground/60">
+                      {isExpanded ? (
+                        <ChevronUp className="w-3 h-3" />
+                      ) : (
+                        <ChevronDown className="w-3 h-3" />
+                      )}
+                      details
+                    </span>
+                  )}
                 </div>
               </div>
               <div className={cn(
-                'text-right',
+                'text-right flex items-center gap-2',
                 isSettled && 'text-muted-foreground',
               )}>
                 <div className={cn(
@@ -91,6 +118,18 @@ export function BalancesList({ balances, participants, currency }: Props) {
                   }}
                 />
               </div>
+            )}
+
+            {/* Drill-down section */}
+            {isExpanded && !isSettled && (
+              <BalanceDrillDown
+                participantId={participant.id}
+                participantName={participant.name}
+                groupId={groupId}
+                participants={participants}
+                balanceTotal={balance}
+                currency={currency}
+              />
             )}
           </div>
         )
