@@ -41,7 +41,8 @@ export function CurrencySelector({
   useEffect(() => {
     setValue(defaultValue)
     onValueChange(defaultValue)
-  }, [defaultValue, onValueChange])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [defaultValue])
 
   const selectedCurrency =
     currencies.find((currency) => (currency.code ?? '') === value) ??

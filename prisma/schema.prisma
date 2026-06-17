@@ -30,6 +30,7 @@ model Group {
   expenses     Expense[]
   activities   Activity[]
   createdAt    DateTime      @default(now())
+  joinRequests JoinRequest[]
 
   @@index([userId])
 }
@@ -150,6 +151,20 @@ model LeaveRequest {
 
   @@index([groupId])
   @@index([participantId])
+}
+
+model JoinRequest {
+  id         String   @id
+  groupId    String
+  name       String   // The name the user wants to join with
+  hash       String   // The auth hash of the requesting user
+  status     String   @default("pending") // "pending", "approved", "rejected"
+  createdAt  DateTime @default(now())
+  resolvedAt DateTime?
+
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@index([groupId])
 }
 
 model ImportLog {

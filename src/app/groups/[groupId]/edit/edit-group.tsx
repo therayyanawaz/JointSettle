@@ -22,6 +22,7 @@ import {
   Trash2,
   XCircle,
   UserMinus,
+  UserPlus,
   Loader2,
 } from 'lucide-react'
 import { useTranslations } from 'next-intl'
@@ -35,6 +36,7 @@ export const EditGroup = () => {
   const t = useTranslations('Settings')
   const dt = useTranslations('DeleteGroup')
   const lt = useTranslations('LeaveGroup')
+  const jt = useTranslations('JoinRequests')
   const { data, isLoading } = trpc.groups.getDetails.useQuery({ groupId, hash: hash! })
   const { mutateAsync: updateGroup } = trpc.groups.update.useMutation()
   const { mutateAsync: deleteGroup, isPending: isDeleting } = trpc.groups.delete.useMutation()
@@ -49,6 +51,17 @@ export const EditGroup = () => {
     trpc.groups.leave.approve.useMutation()
   const { mutateAsync: rejectRequest, isPending: isRejecting } =
     trpc.groups.leave.reject.useMutation()
+
+  // Join requests query (admin only)
+  const { data: joinRequestsData, isLoading: joinRequestsLoading, refetch: refetchJoinRequests } =
+    trpc.groups.joinRequests.listRequests.useQuery(
+      { groupId, hash: hash! },
+      { enabled: isOwner },
+    )
+  const { mutateAsync: approveJoinRequest, isPending: isApprovingJoin } =
+    trpc.groups.joinRequests.approve.useMutation()
+  const { mutateAsync: rejectJoinRequest, isPending: isRejectingJoin } =
+    trpc.groups.joinRequests.reject.useMutation()
 
   const utils = trpc.useUtils()
   const router = useRouter()
@@ -92,11 +105,35 @@ export const EditGroup = () => {
     }
   }
 
+  const handleApproveJoin = async (requestId: string) => {
+    try {
+      await approveJoinRequest({ groupId, hash: hash!, requestId })
+      toast({ description: jt('approveSuccess') })
+      await refetchJoinRequests()
+      await utils.groups.invalidate()
+    } catch (err: any) {
+      toast({ description: err.message || jt('approveError'), variant: 'destructive' })
+    }
+  }
+
+  const handleRejectJoin = async (requestId: string) => {
+    try {
+      await rejectJoinRequest({ groupId, hash: hash!, requestId })
+      toast({ description: jt('rejectSuccess') })
+      await refetchJoinRequests()
+    } catch (err: any) {
+      toast({ description: err.message || jt('rejectError'), variant: 'destructive' })
+    }
+  }
+
   const pendingRequests = leaveRequestsData?.requests.filter(
     (r: any) => r.status === 'pending'
   ) ?? []
   const resolvedRequests = leaveRequestsData?.requests.filter(
     (r: any) => r.status !== 'pending'
+  ) ?? []
+  const pendingJoinRequests = joinRequestsData?.requests.filter(
+    (r: any) => r.status === 'pending'
   ) ?? []
 
   return (
@@ -223,6 +260,85 @@ export const EditGroup = () => {
                 ))}
               </div>
             </details>
+          )}
+        </div>
+      )}
+
+      {/* Join Requests — Admin Only */}
+      {isOwner && (
+        <div className="mt-8 rounded-xl border border-blue-200/30 dark:border-blue-900/20 bg-white/50 dark:bg-white/[0.03] backdrop-blur-sm p-5">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-100 to-indigo-100 dark:from-blue-900/30 dark:to-indigo-900/30 flex items-center justify-center">
+              <UserPlus className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+            </div>
+            <div>
+              <h2 className="font-heading font-bold text-lg text-blue-700 dark:text-blue-400">{jt('requestsTitle')}</h2>
+              <p className="text-xs text-muted-foreground mt-0.5">{jt('requestsDescription')}</p>
+            </div>
+          </div>
+
+          {joinRequestsLoading ? (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              Loading requests...
+            </div>
+          ) : pendingJoinRequests.length === 0 ? (
+            <div className="text-sm text-muted-foreground">
+              <p>{jt('noPendingRequests')}</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {pendingJoinRequests.map((request: any) => (
+                <div
+                  key={request.id}
+                  className="flex items-center justify-between gap-3 rounded-lg border border-blue-200/30 dark:border-blue-800/30 bg-blue-50/30 dark:bg-blue-950/10 p-3"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-100 to-indigo-100 dark:from-blue-900/30 dark:to-indigo-900/30 flex items-center justify-center shrink-0">
+                      <UserPlus className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate">
+                        {request.name}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {jt('wantsToJoin')}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleApproveJoin(request.id)}
+                      disabled={isApprovingJoin || isRejectingJoin}
+                      className="border-emerald-200/50 dark:border-emerald-800/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50/50 dark:hover:bg-emerald-950/30"
+                    >
+                      {isApprovingJoin ? (
+                        <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />
+                      ) : (
+                        <CheckCircle className="w-3.5 h-3.5 mr-1" />
+                      )}
+                      {jt('approve')}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleRejectJoin(request.id)}
+                      disabled={isApprovingJoin || isRejectingJoin}
+                      className="border-red-200/50 dark:border-red-800/30 text-red-600 dark:text-red-400 hover:bg-red-50/50 dark:hover:bg-red-950/30"
+                    >
+                      {isRejectingJoin ? (
+                        <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />
+                      ) : (
+                        <XCircle className="w-3.5 h-3.5 mr-1" />
+                      )}
+                      {jt('reject')}
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
           )}
         </div>
       )}

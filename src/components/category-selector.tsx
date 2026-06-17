@@ -42,7 +42,8 @@ export function CategorySelector({
   useEffect(() => {
     setValue(defaultValue)
     onValueChange(defaultValue)
-  }, [defaultValue, onValueChange])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [defaultValue])
 
   const selectedCategory =
     categories.find((category) => category.id === value) ?? categories[0]

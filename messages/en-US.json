@@ -190,10 +190,30 @@
   "JoinGroup": {
     "join": "Join Group",
     "title": "Join this group",
-    "description": "Enter your name to join {groupName} as a participant.",
+    "description": "Join {groupName} by selecting your name or adding a new one.",
+    "selectLabel": "Select your name",
+    "customNameOption": "Or enter a custom name",
+    "backToSelect": "Back to existing names",
+    "or": "or",
+    "noAvailableParticipants": "No participants available to claim.",
     "nameLabel": "Your name",
     "namePlaceholder": "Enter your display name...",
-    "joining": "Joining..."
+    "joining": "Joining...",
+    "close": "Close",
+    "requestSentTitle": "Request Sent",
+    "requestSentDescription": "Your request to join has been sent to the group admin. You'll be added once they approve it."
+  },
+  "JoinRequests": {
+    "requestsTitle": "Join Requests",
+    "requestsDescription": "Approve or reject requests to join this group",
+    "noPendingRequests": "No pending join requests.",
+    "wantsToJoin": "wants to join the group",
+    "approve": "Approve",
+    "reject": "Reject",
+    "approveSuccess": "Join request approved. Participant has been added.",
+    "approveError": "Failed to approve join request.",
+    "rejectSuccess": "Join request rejected.",
+    "rejectError": "Failed to reject join request."
   },
   "LeaveGroup": {
     "leave": "Request to Leave",

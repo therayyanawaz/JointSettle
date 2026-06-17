@@ -5,7 +5,7 @@ import { baseProcedure } from '@/trpc/init'
 import { TRPCError } from '@trpc/server'
 import { z } from 'zod'
 
-export const joinGroupProcedure = baseProcedure
+export const requestJoinProcedure = baseProcedure
   .input(
     z.object({
       groupId: z.string().min(1),
@@ -22,32 +22,51 @@ export const joinGroupProcedure = baseProcedure
     // Check group exists
     const group = await prisma.group.findUnique({
       where: { id: groupId },
-      include: { participants: true },
     })
     if (!group) {
       throw new TRPCError({ code: 'NOT_FOUND', message: 'Group not found' })
     }
 
-    // Check if a participant with the same name already exists
-    const existingParticipant = group.participants.find(
-      (p) => p.name.toLowerCase() === name.toLowerCase(),
-    )
-    if (existingParticipant) {
+    // Check if user already has a pending join request for this group
+    const existingPending = await prisma.joinRequest.findFirst({
+      where: {
+        groupId,
+        hash,
+        status: 'pending',
+      },
+    })
+    if (existingPending) {
       throw new TRPCError({
         code: 'CONFLICT',
-        message: 'A participant with this name already exists in this group',
+        message: 'You already have a pending join request for this group.',
       })
     }
 
-    // Add the user as a participant
-    const participant = await prisma.participant.create({
+    // Check if a participant with the same name already exists
+    const existingParticipant = await prisma.participant.findFirst({
+      where: {
+        groupId,
+        name: { equals: name, mode: 'insensitive' },
+        leftAt: null,
+      },
+    })
+    if (existingParticipant) {
+      throw new TRPCError({
+        code: 'CONFLICT',
+        message: 'A participant with this name already exists in this group.',
+      })
+    }
+
+    // Create the join request
+    await prisma.joinRequest.create({
       data: {
         id: randomId(),
-        name,
         groupId,
-        joinedAt: new Date(),
+        name,
+        hash,
+        status: 'pending',
       },
     })
 
-    return { participant }
+    return { success: true }
   })
